@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจำลองการจัดตารางงาน CPU Scheduling (FCFS, SJF, Round Robin)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        sky: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts: Prompt -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-sky-50 text-slate-800 min-h-screen pb-12">
+
+    <!-- Header Navbar -->
+    <header class="bg-gradient-to-r from-sky-600 to-sky-800 text-white shadow-md py-6 mb-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center">
+            <div>
+                <h1 class="text-2xl md:text-3xl font-bold flex items-center gap-2">
+                    ⚙️ ระบบจำลองการจัดตารางงาน CPU Scheduling
+                </h1>
+                <p class="text-sky-100 text-sm mt-1">มินิโปรเจ็ควิชาระบบปฏิบัติการ (Operating Systems)</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex gap-2">
+                <button onclick="window.print()" class="bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg font-medium transition border border-white/20 flex items-center gap-1.5">
+                    🖨️ พิมพ์ / ส่งออกรายงาน
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+
+        <!-- Section 1: ควบคุมและกำหนดค่าโจทย์ -->
+        <section class="bg-white rounded-2xl shadow-sm border border-sky-100 p-6">
+            <h2 class="text-lg font-bold text-sky-900 mb-4 flex items-center gap-2">
+                📋 ข้อมูลโจทย์และพารามิเตอร์การทดลอง (Seed & Parameters)
+            </h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Seed (รหัสสุ่ม)</label>
+                    <input type="text" id="seedInput" value="OS2026" class="w-full bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sky-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">จำนวนงาน (Processes: 3-6)</label>
+                    <input type="number" id="numProcInput" min="3" max="6" value="4" class="w-full bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Time Quantum (q) สำหรับ RR</label>
+                    <input type="number" id="timeQuantumInput" min="1" max="5" value="2" class="w-full bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-sky-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">วันและเวลาฐาน (t0)</label>
+                    <input type="text" id="baseTimeInput" value="10:00 น." class="w-full bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
+                </div>
+                <div class="flex flex-col justify-end gap-2">
+                    <button onclick="generateRandomData()" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-medium py-2 px-3 rounded-lg text-xs transition shadow-sm flex items-center justify-center gap-1">
+                        🎲 สุ่มโจทย์ใหม่
+                    </button>
+                    <button onclick="loadExampleData()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2 px-3 rounded-lg text-xs transition shadow-sm flex items-center justify-center gap-1">
+                        📥 โหลดโจทย์ตัวอย่าง (หน้า 4)
+                    </button>
+                </div>
+            </div>
+
+            <!-- ตารางแสดงรายการ Process เรียงตาม P1, P2, P3... ถูกต้องตามรหัส -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse" id="processTable">
+                    <thead>
+                        <tr class="bg-sky-100 text-sky-900 text-xs uppercase tracking-wider">
+                            <th class="py-3 px-4 rounded-l-lg">Process</th>
+                            <th class="py-3 px-4">รายวิชา / ชิ้นงาน</th>
+                            <th class="py-3 px-4">Arrival Time (AT)</th>
+                            <th class="py-3 px-4 rounded-r-lg">Burst Time (BT)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm divide-y divide-sky-100" id="processTableBody">
+                        <!-- Rendered by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-6 flex justify-end">
+                <button onclick="runSimulation()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-3 px-8 rounded-xl shadow-md transition flex items-center gap-2">
+                    🚀 เริ่มต้นจำลองและคำนวณผล (Run Simulation)
+                </button>
+            </div>
+        </section>
+
+        <!-- Section 2: ผลการจำลอง FCFS, SJF, RR -->
+        <div id="resultsContainer" class="space-y-8 hidden">
+
+            <!-- FCFS Results -->
+            <div class="bg-white rounded-2xl shadow-sm border border-sky-100 p-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 pb-3 border-b border-sky-100">
+                    <h3 class="text-lg font-bold text-sky-900 flex items-center gap-2">
+                        📊 1. First-Come, First-Served (FCFS)
+                    </h3>
+                    <div class="text-xs bg-sky-50 text-sky-700 px-3 py-1 rounded-full border border-sky-200 font-medium mt-2 sm:mt-0">
+                        TAT เฉลี่ย: <span id="fcfsAvgTat" class="font-bold text-sky-900">0.00</span> | WT เฉลี่ย: <span id="fcfsAvgWt" class="font-bold text-sky-900">0.00</span>
+                    </div>
+                </div>
+                <div class="mb-6">
+                    <p class="text-xs font-semibold text-slate-500 mb-2">Gantt Chart:</p>
+                    <div id="fcfsGantt" class="flex flex-wrap gap-1 p-3 bg-sky-50 rounded-xl border border-sky-200 min-h-[70px] items-center"></div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-sky-50 text-sky-900 text-xs uppercase">
+                                <th class="py-2.5 px-3">Process</th>
+                                <th class="py-2.5 px-3">AT</th>
+                                <th class="py-2.5 px-3">BT</th>
+                                <th class="py-2.5 px-3">CT</th>
+                                <th class="py-2.5 px-3">TAT (CT - AT)</th>
+                                <th class="py-2.5 px-3">WT (TAT - BT)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fcfsTableBody" class="divide-y divide-sky-100"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SJF Results -->
+            <div class="bg-white rounded-2xl shadow-sm border border-sky-100 p-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 pb-3 border-b border-sky-100">
+                    <h3 class="text-lg font-bold text-sky-900 flex items-center gap-2">
+                        📊 2. Shortest Job First (SJF - Non-preemptive)
+                    </h3>
+                    <div class="text-xs bg-sky-50 text-sky-700 px-3 py-1 rounded-full border border-sky-200 font-medium mt-2 sm:mt-0">
+                        TAT เฉลี่ย: <span id="sjfAvgTat" class="font-bold text-sky-900">0.00</span> | WT เฉลี่ย: <span id="sjfAvgWt" class="font-bold text-sky-900">0.00</span>
+                    </div>
+                </div>
+                <div class="mb-6">
+                    <p class="text-xs font-semibold text-slate-500 mb-2">Gantt Chart:</p>
+                    <div id="sjfGantt" class="flex flex-wrap gap-1 p-3 bg-sky-50 rounded-xl border border-sky-200 min-h-[70px] items-center"></div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-sky-50 text-sky-900 text-xs uppercase">
+                                <th class="py-2.5 px-3">Process</th>
+                                <th class="py-2.5 px-3">AT</th>
+                                <th class="py-2.5 px-3">BT</th>
+                                <th class="py-2.5 px-3">CT</th>
+                                <th class="py-2.5 px-3">TAT (CT - AT)</th>
+                                <th class="py-2.5 px-3">WT (TAT - BT)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sjfTableBody" class="divide-y divide-sky-100"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Round Robin Results -->
+            <div class="bg-white rounded-2xl shadow-sm border border-sky-100 p-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 pb-3 border-b border-sky-100">
+                    <h3 class="text-lg font-bold text-sky-900 flex items-center gap-2">
+                        📊 3. Round Robin (RR)
+                    </h3>
+                    <div class="text-xs bg-sky-50 text-sky-700 px-3 py-1 rounded-full border border-sky-200 font-medium mt-2 sm:mt-0">
+                        TAT เฉลี่ย: <span id="rrAvgTat" class="font-bold text-sky-900">0.00</span> | WT เฉลี่ย: <span id="rrAvgWt" class="font-bold text-sky-900">0.00</span>
+                    </div>
+                </div>
+                <div class="mb-6">
+                    <p class="text-xs font-semibold text-slate-500 mb-2">Gantt Chart:</p>
+                    <div id="rrGantt" class="flex flex-wrap gap-1 p-3 bg-sky-50 rounded-xl border border-sky-200 min-h-[70px] items-center"></div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-sky-50 text-sky-900 text-xs uppercase">
+                                <th class="py-2.5 px-3">Process</th>
+                                <th class="py-2.5 px-3">AT</th>
+                                <th class="py-2.5 px-3">BT</th>
+                                <th class="py-2.5 px-3">CT</th>
+                                <th class="py-2.5 px-3">TAT (CT - AT)</th>
+                                <th class="py-2.5 px-3">WT (TAT - BT)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rrTableBody" class="divide-y divide-sky-100"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Section 3: ตรวจสอบผลคำนวณด้วยมือ (Manual Verification Mode) -->
+            <div class="bg-white rounded-2xl shadow-sm border border-sky-100 p-6">
+                <h3 class="text-lg font-bold text-sky-900 mb-2 flex items-center gap-2">
+                    📝 ตารางตรวจคำนวณด้วยมือ (Manual Calculation Verification)
+                </h3>
+                <p class="text-xs text-slate-500 mb-6">กรอกผลลัพธ์ที่คุณคำนวณด้วยมือลงในช่องด้านล่าง ระบบจะทำการเปรียบเทียบกับผลลัพธ์จริงของโปรแกรมให้อัตโนมัติ</p>
+
+                <div class="flex border-b border-sky-100 mb-6 gap-2">
+                    <button onclick="switchVerifyTab('fcfs')" id="vTab-fcfs" class="px-4 py-2 text-sm font-semibold border-b-2 border-sky-600 text-sky-700 transition">FCFS</button>
+                    <button onclick="switchVerifyTab('sjf')" id="vTab-sjf" class="px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-sky-700 transition">SJF</button>
+                    <button onclick="switchVerifyTab('rr')" id="vTab-rr" class="px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-sky-700 transition">Round Robin</button>
+                </div>
+
+                <div id="verifyAreaFcfs" class="verify-content space-y-4">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-sky-50 text-sky-900 text-xs uppercase">
+                                    <th class="py-2.5 px-3">Process</th>
+                                    <th class="py-2.5 px-3">CT (ทำมือ)</th>
+                                    <th class="py-2.5 px-3">TAT (ทำมือ)</th>
+                                    <th class="py-2.5 px-3">WT (ทำมือ)</th>
+                                    <th class="py-2.5 px-3">สถานะเทียบกับโปรแกรม</th>
+                                </tr>
+                            </thead>
+                            <tbody id="verifyBodyFcfs" class="divide-y divide-sky-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="verifyAreaSjf" class="verify-content space-y-4 hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-sky-50 text-sky-900 text-xs uppercase">
+                                    <th class="py-2.5 px-3">Process</th>
+                                    <th class="py-2.5 px-3">CT (ทำมือ)</th>
+                                    <th class="py-2.5 px-3">TAT (ทำมือ)</th>
+                                    <th class="py-2.5 px-3">WT (ทำมือ)</th>
+                                    <th class="py-2.5 px-3">สถานะเทียบกับโปรแกรม</th>
+                                </tr>
+                            </thead>
+                            <tbody id="verifyBodySjf" class="divide-y divide-sky-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="verifyAreaRr" class="verify-content space-y-4 hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-sky-50 text-sky-900 text-xs uppercase">
+                                    <th class="py-2.5 px-3">Process</th>
+                                    <th class="py-2.5 px-3">CT (ทำมือ)</th>
+                                    <th class="py-2.5 px-3">TAT (ทำมือ)</th>
+                                    <th class="py-2.5 px-3">WT (ทำมือ)</th>
+                                    <th class="py-2.5 px-3">สถานะเทียบกับโปรแกรม</th>
+                                </tr>
+                            </thead>
+                            <tbody id="verifyBodyRr" class="divide-y divide-sky-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 4: ตารางสรุปผลการทดลองเปรียบเทียบ -->
+            <div class="bg-white rounded-2xl shadow-sm border border-sky-100 p-6">
+                <h3 class="text-lg font-bold text-sky-900 mb-4 flex items-center gap-2">
+                    📋 สรุปผลการทดลองเปรียบเทียบอัลกอริทึม
+                </h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="bg-sky-100 text-sky-900 text-xs uppercase">
+                                <th class="py-3 px-4">อัลกอริทึม</th>
+                                <th class="py-3 px-4">TAT เฉลี่ย (ทำมือ)</th>
+                                <th class="py-3 px-4">TAT เฉลี่ย (โปรแกรม)</th>
+                                <th class="py-3 px-4">WT เฉลี่ย (ทำมือ)</th>
+                                <th class="py-3 px-4">WT เฉลี่ย (โปรแกรม)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-sky-100">
+                            <tr>
+                                <td class="py-3 px-4 font-semibold text-sky-900">FCFS</td>
+                                <td class="py-3 px-4"><input type="number" step="0.01" id="mAvgTatFcfs" placeholder="0.00" class="w-24 bg-sky-50 border border-sky-200 rounded px-2 py-1 text-sm"></td>
+                                <td class="py-3 px-4 font-bold text-sky-700" id="pAvgTatFcfs">0.00</td>
+                                <td class="py-3 px-4"><input type="number" step="0.01" id="mAvgWtFcfs" placeholder="0.00" class="w-24 bg-sky-50 border border-sky-200 rounded px-2 py-1 text-sm"></td>
+                                <td class="py-3 px-4 font-bold text-sky-700" id="pAvgWtFcfs">0.00</td>
+                            </tr>
+                            <tr>
+                                <td class="py-3 px-4 font-semibold text-sky-900">SJF</td>
+                                <td class="py-3 px-4"><input type="number" step="0.01" id="mAvgTatSjf" placeholder="0.00" class="w-24 bg-sky-50 border border-sky-200 rounded px-2 py-1 text-sm"></td>
+                                <td class="py-3 px-4 font-bold text-sky-700" id="pAvgTatSjf">0.00</td>
+                                <td class="py-3 px-4"><input type="number" step="0.01" id="mAvgWtSjf" placeholder="0.00" class="w-24 bg-sky-50 border border-sky-200 rounded px-2 py-1 text-sm"></td>
+                                <td class="py-3 px-4 font-bold text-sky-700" id="pAvgWtSjf">0.00</td>
+                            </tr>
+                            <tr>
+                                <td class="py-3 px-4 font-semibold text-sky-900">Round Robin (q=<span id="qDisplayLabel">2</span>)</td>
+                                <td class="py-3 px-4"><input type="number" step="0.01" id="mAvgTatRr" placeholder="0.00" class="w-24 bg-sky-50 border border-sky-200 rounded px-2 py-1 text-sm"></td>
+                                <td class="py-3 px-4 font-bold text-sky-700" id="pAvgTatRr">0.00</td>
+                                <td class="py-3 px-4"><input type="number" step="0.01" id="mAvgWtRr" placeholder="0.00" class="w-24 bg-sky-50 border border-sky-200 rounded px-2 py-1 text-sm"></td>
+                                <td class="py-3 px-4 font-bold text-sky-700" id="pAvgWtRr">0.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- JavaScript Logic -->
+    <script>
+        const subjectList = [
+            "แบบฝึกหัด OS", "รายงาน Database", "สรุป English", "แบบฝึกหัด Math", 
+            "โปรเจกต์ Web App", "โครงงาน Network", "ทบทวน Algorithm", "ทำการบ้าน AI"
+        ];
+
+        let currentProcesses = [];
+        let simulationResults = {};
+
+        function loadExampleData() {
+            // โหลดโจทย์ตัวอย่างจากหน้า 4 ของใบงานเป๊ะๆ
+            currentProcesses = [
+                { id: 'P1', name: 'แบบฝึกหัด OS', at: 0, bt: 5 },
+                { id: 'P2', name: 'รายงาน Database', at: 1, bt: 3 },
+                { id: 'P3', name: 'สรุป English', at: 2, bt: 1 },
+                { id: 'P4', name: 'แบบฝึกหัด Math', at: 4, bt: 2 }
+            ];
+            document.getElementById('numProcInput').value = 4;
+            document.getElementById('timeQuantumInput').value = 2;
+            renderProcessTable();
+            runSimulation();
+        }
+
+        function generateRandomData() {
+            const numProc = parseInt(document.getElementById('numProcInput').value) || 4;
+            currentProcesses = [];
+            let shuffledSubjects = [...subjectList].sort(() => 0.5 - Math.random());
+
+            for (let i = 1; i <= numProc; i++) {
+                let at = (i === 1) ? 0 : Math.floor(Math.random() * 6); // P1 เริ่มที่ 0 เสมอ
+                let bt = Math.floor(Math.random() * 5) + 1; // BT ระหว่าง 1-5
+
+                currentProcesses.push({
+                    id: `P${i}`,
+                    name: shuffledSubjects[i-1] || `งานวิชา ${i}`,
+                    at: at,
+                    bt: bt
+                });
+            }
+
+            renderProcessTable();
+        }
+
+        function renderProcessTable() {
+            const tbody = document.getElementById('processTableBody');
+            tbody.innerHTML = '';
+            currentProcesses.forEach((p, idx) => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-sky-50/50 transition">
+                        <td class="py-3 px-4 font-bold text-sky-900">${p.id}</td>
+                        <td class="py-3 px-4">
+                            <input type="text" value="${p.name}" onchange="currentProcesses[${idx}].name = this.value" class="bg-transparent border-b border-dashed border-sky-300 focus:outline-none focus:border-sky-600 w-full text-sm py-0.5">
+                        </td>
+                        <td class="py-3 px-4">
+                            <input type="number" min="0" max="10" value="${p.at}" onchange="currentProcesses[${idx}].at = parseInt(this.value)||0" class="bg-sky-50 border border-sky-200 rounded px-2 py-1 w-20 text-sm">
+                        </td>
+                        <td class="py-3 px-4">
+                            <input type="number" min="1" max="10" value="${p.bt}" onchange="currentProcesses[${idx}].bt = parseInt(this.value)||1" class="bg-sky-50 border border-sky-200 rounded px-2 py-1 w-20 text-sm">
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function runSimulation() {
+            if (currentProcesses.length === 0) {
+                generateRandomData();
+            }
+
+            const q = parseInt(document.getElementById('timeQuantumInput').value) || 2;
+            document.getElementById('qDisplayLabel').innerText = q;
+
+            simulationResults.fcfs = solveFCFS(currentProcesses);
+            simulationResults.sjf = solveSJF(currentProcesses);
+            simulationResults.rr = solveRR(currentProcesses, q);
+
+            displayResults('fcfs', simulationResults.fcfs);
+            displayResults('sjf', simulationResults.sjf);
+            displayResults('rr', simulationResults.rr);
+
+            document.getElementById('pAvgTatFcfs').innerText = simulationResults.fcfs.avgTat.toFixed(2);
+            document.getElementById('pAvgWtFcfs').innerText = simulationResults.fcfs.avgWt.toFixed(2);
+            document.getElementById('pAvgTatSjf').innerText = simulationResults.sjf.avgTat.toFixed(2);
+            document.getElementById('pAvgWtSjf').innerText = simulationResults.sjf.avgWt.toFixed(2);
+            document.getElementById('pAvgTatRr').innerText = simulationResults.rr.avgTat.toFixed(2);
+            document.getElementById('pAvgWtRr').innerText = simulationResults.rr.avgWt.toFixed(2);
+
+            renderVerificationInputs('fcfs', simulationResults.fcfs.results);
+            renderVerificationInputs('sjf', simulationResults.sjf.results);
+            renderVerificationInputs('rr', simulationResults.rr.results);
+
+            document.getElementById('resultsContainer').classList.remove('hidden');
+            document.getElementById('resultsContainer').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // --- FCFS Algorithm ---
+        function solveFCFS(procs) {
+            let procsCopy = JSON.parse(JSON.stringify(procs));
+            // จัดลำดับคิวตาม AT จากน้อยไปมาก ถ้า AT เท่ากันเรียงตามรหัส P จากน้อยไปมาก
+            procsCopy.sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
+
+            let currentTime = 0;
+            let gantt = [];
+            let resultsMap = {};
+
+            procsCopy.forEach(p => {
+                if (currentTime < p.at) {
+                    gantt.push({ name: 'Idle', start: currentTime, end: p.at });
+                    currentTime = p.at;
+                }
+                let start = currentTime;
+                currentTime += p.bt;
+                let end = currentTime;
+                gantt.push({ name: p.id, start: start, end: end });
+
+                let ct = end;
+                let tat = ct - p.at;
+                let wt = tat - p.bt;
+                resultsMap[p.id] = { id: p.id, at: p.at, bt: p.bt, ct: ct, tat: tat, wt: wt };
+            });
+
+            // คืนค่าผลลัพธ์เรียงตามรหัส P1, P2, P3... เดิม
+            let results = procs.map(p => resultsMap[p.id]);
+            let avgTat = results.reduce((acc, r) => acc + r.tat, 0) / results.length;
+            let avgWt = results.reduce((acc, r) => acc + r.wt, 0) / results.length;
+
+            return { gantt, results, avgTat, avgWt };
+        }
+
+        // --- SJF (Non-preemptive) Algorithm ---
+        function solveSJF(procs) {
+            let procsCopy = JSON.parse(JSON.stringify(procs));
+            let currentTime = 0;
+            let gantt = [];
+            let resultsMap = {};
+            let completed = 0;
+            let n = procsCopy.length;
+            let isCompleted = new Array(n).fill(false);
+
+            while (completed < n) {
+                let readyList = [];
+                for (let i = 0; i < n; i++) {
+                    if (!isCompleted[i] && procsCopy[i].at <= currentTime) {
+                        readyList.push(i);
+                    }
+                }
+
+                if (readyList.length === 0) {
+                    let nextAt = Infinity;
+                    for (let i = 0; i < n; i++) {
+                        if (!isCompleted[i] && procsCopy[i].at > currentTime) {
+                            if (procsCopy[i].at < nextAt) nextAt = procsCopy[i].at;
+                        }
+                    }
+                    gantt.push({ name: 'Idle', start: currentTime, end: nextAt });
+                    currentTime = nextAt;
+                    continue;
+                }
+
+                readyList.sort((a, b) => {
+                    if (procsCopy[a].bt !== procsCopy[b].bt) return procsCopy[a].bt - procsCopy[b].bt;
+                    if (procsCopy[a].at !== procsCopy[b].at) return procsCopy[a].at - procsCopy[b].at;
+                    return procsCopy[a].id.localeCompare(procsCopy[b].id);
+                });
+
+                let idx = readyList[0];
+                let p = procsCopy[idx];
+
+                let start = currentTime;
+                currentTime += p.bt;
+                let end = currentTime;
+                gantt.push({ name: p.id, start: start, end: end });
+
+                let ct = end;
+                let tat = ct - p.at;
+                let wt = tat - p.bt;
+                resultsMap[p.id] = { id: p.id, at: p.at, bt: p.bt, ct: ct, tat: tat, wt: wt };
+
+                isCompleted[idx] = true;
+                completed++;
+            }
+
+            let results = procs.map(p => resultsMap[p.id]);
+            let avgTat = results.reduce((acc, r) => acc + r.tat, 0) / results.length;
+            let avgWt = results.reduce((acc, r) => acc + r.wt, 0) / results.length;
+
+            return { gantt, results, avgTat, avgWt };
+        }
+
+        // --- Round Robin Algorithm ---
+        function solveRR(procs, q) {
+            let procsCopy = procs.map(p => ({ ...p, remainingBt: p.bt }));
+            let sortedByAt = [...procsCopy].sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
+
+            let currentTime = 0;
+            let gantt = [];
+            let queue = [];
+            let n = procsCopy.length;
+            let completed = 0;
+            let resultsMap = {};
+
+            let i = 0;
+            while (i < n && sortedByAt[i].at <= currentTime) {
+                queue.push(sortedByAt[i]);
+                i++;
+            }
+
+            if (queue.length === 0 && i < n) {
+                currentTime = sortedByAt[i].at;
+                while (i < n && sortedByAt[i].at <= currentTime) {
+                    queue.push(sortedByAt[i]);
+                    i++;
+                }
+            }
+
+            while (completed < n) {
+                if (queue.length === 0) {
+                    if (i < n) {
+                        gantt.push({ name: 'Idle', start: currentTime, end: sortedByAt[i].at });
+                        currentTime = sortedByAt[i].at;
+                        while (i < n && sortedByAt[i].at <= currentTime) {
+                            queue.push(sortedByAt[i]);
+                            i++;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+
+                let currentProc = queue.shift();
+                let execTime = Math.min(currentProc.remainingBt, q);
+                let start = currentTime;
+                currentTime += execTime;
+                let end = currentTime;
+                currentProc.remainingBt -= execTime;
+
+                gantt.push({ name: currentProc.id, start: start, end: end });
+
+                while (i < n && sortedByAt[i].at <= currentTime) {
+                    queue.push(sortedByAt[i]);
+                    i++;
+                }
+
+                if (currentProc.remainingBt > 0) {
+                    queue.push(currentProc);
+                } else {
+                    let ct = end;
+                    let tat = ct - currentProc.at;
+                    let wt = tat - currentProc.bt;
+                    resultsMap[currentProc.id] = { id: currentProc.id, at: currentProc.at, bt: currentProc.bt, ct: ct, tat: tat, wt: wt };
+                    completed++;
+                }
+            }
+
+            let results = procs.map(p => resultsMap[p.id]);
+            let avgTat = results.reduce((acc, r) => acc + r.tat, 0) / results.length;
+            let avgWt = results.reduce((acc, r) => acc + r.wt, 0) / results.length;
+
+            return { gantt, results, avgTat, avgWt };
+        }
+
+        function displayResults(type, data) {
+            const ganttEl = document.getElementById(`${type}Gantt`);
+            ganttEl.innerHTML = '';
+            data.gantt.forEach(g => {
+                let colorClass = g.name === 'Idle' ? 'bg-slate-200 text-slate-600' : 'bg-sky-600 text-white';
+                ganttEl.innerHTML += `
+                    <div class="flex flex-col items-center justify-center p-2 rounded-lg ${colorClass} min-w-[55px] shadow-sm">
+                        <span class="text-xs font-bold">${g.name}</span>
+                        <span class="text-[10px] opacity-90">${g.start} - ${g.end}</span>
+                    </div>
+                `;
+            });
+
+            const tbody = document.getElementById(`${type}TableBody`);
+            tbody.innerHTML = '';
+            data.results.forEach(r => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-sky-50/50">
+                        <td class="py-2.5 px-3 font-bold text-sky-900">${r.id}</td>
+                        <td class="py-2.5 px-3">${r.at}</td>
+                        <td class="py-2.5 px-3">${r.bt}</td>
+                        <td class="py-2.5 px-3 font-semibold text-sky-700">${r.ct}</td>
+                        <td class="py-2.5 px-3">${r.tat}</td>
+                        <td class="py-2.5 px-3">${r.wt}</td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById(`${type}AvgTat`).innerText = data.avgTat.toFixed(2);
+            document.getElementById(`${type}AvgWt`).innerText = data.avgWt.toFixed(2);
+        }
+
+        function switchVerifyTab(tab) {
+            ['fcfs', 'sjf', 'rr'].forEach(t => {
+                document.getElementById(`verifyArea${t.charAt(0).toUpperCase() + t.slice(1)}`).classList.add('hidden');
+                document.getElementById(`vTab-${t}`).className = "px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-sky-700 transition";
+            });
+            document.getElementById(`verifyArea${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.remove('hidden');
+            document.getElementById(`vTab-${tab}`).className = "px-4 py-2 text-sm font-semibold border-b-2 border-sky-600 text-sky-700 transition";
+        }
+
+        function renderVerificationInputs(type, results) {
+            const tbody = document.getElementById(`verifyBody${type.charAt(0).toUpperCase() + type.slice(1)}`);
+            tbody.innerHTML = '';
+            results.forEach((r, idx) => {
+                tbody.innerHTML += `
+                    <tr class="hover:bg-sky-50/50">
+                        <td class="py-2.5 px-3 font-bold text-sky-900">${r.id}</td>
+                        <td class="py-2.5 px-3">
+                            <input type="number" id="v_${type}_ct_${idx}" data-expected="${r.ct}" oninput="checkVerification('${type}', ${idx})" placeholder="CT" class="w-20 bg-sky-50 border border-sky-200 rounded px-2 py-1 text-sm">
+                        </td>
+                        <td class="py-2.5 px-3">
+                            <input type="number" id="v_${type}_tat_${idx}" data-expected="${r.tat}" oninput="checkVerification('${type}', ${idx})" placeholder="TAT" class="w-20 bg-sky-50 border border-sky-200 rounded px-2 py-1 text-sm">
+                        </td>
+                        <td class="py-2.5 px-3">
+                            <input type="number" id="v_${type}_wt_${idx}" data-expected="${r.wt}" oninput="checkVerification('${type}', ${idx})" placeholder="WT" class="w-20 bg-sky-50 border border-sky-200 rounded px-2 py-1 text-sm">
+                        </td>
+                        <td class="py-2.5 px-3" id="v_${type}_status_${idx}">
+                            <span class="text-xs text-slate-400">รอการตรวจสอบ...</span>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        function checkVerification(type, idx) {
+            const ctInput = document.getElementById(`v_${type}_ct_${idx}`);
+            const tatInput = document.getElementById(`v_${type}_tat_${idx}`);
+            const wtInput = document.getElementById(`v_${type}_wt_${idx}`);
+            const statusEl = document.getElementById(`v_${type}_status_${idx}`);
+
+            if (!ctInput.value || !tatInput.value || !wtInput.value) {
+                statusEl.innerHTML = `<span class="text-xs text-slate-400">กรอกข้อมูลยังไม่ครบ</span>`;
+                return;
+            }
+
+            const expCt = parseInt(ctInput.dataset.expected);
+            const expTat = parseInt(tatInput.dataset.expected);
+            const expWt = parseInt(wtInput.dataset.expected);
+
+            if (parseInt(ctInput.value) === expCt && parseInt(tatInput.value) === expTat && parseInt(wtInput.value) === expWt) {
+                statusEl.innerHTML = `<span class="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded font-semibold">✅ ถูกต้องตรงกัน</span>`;
+            } else {
+                statusEl.innerHTML = `<span class="text-xs bg-rose-100 text-rose-800 px-2 py-1 rounded font-semibold">❌ ค่าไม่ตรงกัน</span>`;
+            }
+        }
+
+        window.onload = function() {
+            loadExampleData(); // โหลดโจทย์ตัวอย่างหน้า 4 เป็นค่าเริ่มต้นให้ตรวจงานได้ทันที
+        };
+    </script>
+</body>
+</html>
